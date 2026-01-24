@@ -1,0 +1,25 @@
+<%- include('../includes/head.ejs') %>
+<%- include('../includes/navigation.ejs') %>
+
+<main class="container">
+    <h1>🚀 Batch Agglomeration Engine</h1>
+    <form action="/admin/generate" method="POST">
+        <div class="form-grid">
+            <input type="text" name="productName" placeholder="Product Name (e.g., Paracetamol)" required>
+            <input type="text" name="productCode" placeholder="GS1 Product Code" required>
+            <input type="number" name="companyPrefix" placeholder="Company Prefix (7-9 digits)" required>
+            <input type="date" name="expiryDate" required>
+        </div>
+        
+        <h3>Aggregation Rules</h3>
+        <div class="form-grid">
+            <input type="number" name="uPerC" placeholder="Units per Carton (e.g., 10)" required>
+            <input type="number" name="cPerP" placeholder="Cartons per Pallet (e.g., 50)" required>
+            <input type="number" name="palletQty" placeholder="Number of Pallets" required>
+        </div>
+        
+        <button type="submit" class="btn-main">Initialize Agglomeration</button>
+    </form>
+</main>
+
+<%- include('../includes/end.ejs') %>
