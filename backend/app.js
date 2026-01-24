@@ -1,32 +1,47 @@
-require('dotenv').config();
-const path = require('path');
-const express = require('express');
-const bodyParser = require('body-parser');
-const connectDB = require('./util/database');
+const express = require("express");
+const dotenv = require("dotenv");
+
+const aggregationRoutes = require("./routes/aggregationRoutes");
+
+
+// Load environment variables
+dotenv.config();
+
+// Import DB connection
+const connectDB = require("./utils/database");
 
 const app = express();
 
-// 1. View Engine
-app.set('view engine', 'ejs');
-app.set('views', 'views');
+// --------------------
+// Middleware
+// --------------------
+app.use(express.json());
+app.use("/api/hierarchy", aggregationRoutes);
 
-// 2. Middleware
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json()); // Added for JSON API support
-app.use(express.static(path.join(__dirname, 'public')));
+// --------------------
+// Connect to MongoDB
+// --------------------
+connectDB();
 
-// 3. Routes (Importing the files we created)
-const adminRoutes = require('./routes/admin');
-const apiRoutes = require('./routes/api');
+// --------------------
+// Routes
+// --------------------
+const serialRoutes = require("./routes/serialRoutes");
+app.use("/api/serials", serialRoutes);
+const verificationRoutes = require("./routes/verificationRoutes");
+app.use("/api/verify", verificationRoutes);
 
-app.use('/admin', adminRoutes);
-app.use('/api', apiRoutes);
 
-// 4. Start Server
-const PORT = process.env.PORT || 3000;
+// Test route
+app.get("/", (req, res) => {
+  res.send("SmartTrace Backend Running");
+});
 
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 SmartTrace Server running on http://localhost:${PORT}`);
-  });
+// --------------------
+// Start Server
+// --------------------
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
