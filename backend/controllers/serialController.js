@@ -121,47 +121,13 @@ async function decommissionBatch(req, res) {
   }
 }
 
-// ------------------------------
-// Get QR by Serial Number
-// ------------------------------
-async function getQRBySerial(req, res) {
-  try {
-    const { serialNumber } = req.params;
 
-    const serial = await Serial.findOne({ serialNumber });
-
-    if (!serial) {
-      return res.status(404).json({
-        message: "Serial not found"
-      });
-    }
-
-    if (!serial.qrCode) {
-      return res.status(404).json({
-        message: "QR not found for this serial"
-      });
-    }
-
-    res.json({
-      serialNumber: serial.serialNumber,
-      qrCode: serial.qrCode
-    });
-
-  } catch (err) {
-    console.error("Error fetching QR:", err);
-    res.status(500).json({
-      message: "Failed to fetch QR",
-      error: err.message
-    });
-  }
-}
 
 
 module.exports = {
   generateBatch,
   validateSerial,
-  decommissionBatch,
-  getQRBySerial
+  decommissionBatch
 };
 
 

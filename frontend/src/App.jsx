@@ -23,7 +23,7 @@ function App() {
       <Routes>
           
           
-        
+        <Route path="/" element={<Navigate to="/admin/dashboard" replace />} />
 
         {/* -------- ADMIN ROUTES -------- */}
         <Route path="/admin" element={<AdminLayout />}>

@@ -4,7 +4,7 @@ const { getAdminStats } = require("../controllers/adminController");
 const {
   generateBatch,
   validateSerial,
-  decommissionBatch,getQRBySerial
+  decommissionBatch
 } = require("../controllers/serialController");
 
 // 1. Batch Generation (Primary / Secondary / Tertiary)
@@ -17,6 +17,6 @@ router.get("/serials/validate/:serial", validateSerial);
 router.post("/serials/decommission", decommissionBatch);
 // Admin dashboard statistics
 router.get("/serials/admin/stats", getAdminStats);
-router.get("/qr/:serialNumber", getQRBySerial);
+
 
 module.exports = router;
