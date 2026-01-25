@@ -30,16 +30,17 @@ async function generateBatch(req, res) {
 
       const serialNumber = level === "tertiary" ? result.sscc : result.serialNumber;
       const hashValue = generateHash(serialNumber, productionDate, productCode);
-const verificationCode = hashValue.slice(0, 8); // first 8 chars
+      const verificationCode = hashValue.slice(0, 8); // first 8 chars
 
 
       // Payload embedded inside QR
-      const qrPayload = {
-        serial: serialNumber,
-        productCode,
-        level,
-        companyPrefix
-      };
+const qrPayload = {
+  serialNumber,
+  productCode,
+  level,
+  verifyUrl: `http://localhost:3000/scan?serial=${serialNumber}`
+};
+
 
       const qrCode = await generateQRCode(qrPayload);
 
@@ -58,11 +59,14 @@ const verificationCode = hashValue.slice(0, 8); // first 8 chars
     }
 
     await Serial.insertMany(bulk, { ordered: false });
-
-    res.json({
-      message: "Batch generated successfully",
-      generated: bulk.length
-    });
+res.json({
+  message: "Batch generated successfully",
+  generated: bulk.length,
+  labels: bulk.map(item => ({
+    serialNumber: item.serialNumber,
+    qrCode: item.qrCode
+  }))
+});
 
   } catch (err) {
     console.error(err);
@@ -117,8 +121,47 @@ async function decommissionBatch(req, res) {
   }
 }
 
+// ------------------------------
+// Get QR by Serial Number
+// ------------------------------
+async function getQRBySerial(req, res) {
+  try {
+    const { serialNumber } = req.params;
+
+    const serial = await Serial.findOne({ serialNumber });
+
+    if (!serial) {
+      return res.status(404).json({
+        message: "Serial not found"
+      });
+    }
+
+    if (!serial.qrCode) {
+      return res.status(404).json({
+        message: "QR not found for this serial"
+      });
+    }
+
+    res.json({
+      serialNumber: serial.serialNumber,
+      qrCode: serial.qrCode
+    });
+
+  } catch (err) {
+    console.error("Error fetching QR:", err);
+    res.status(500).json({
+      message: "Failed to fetch QR",
+      error: err.message
+    });
+  }
+}
+
+
 module.exports = {
   generateBatch,
   validateSerial,
-  decommissionBatch
+  decommissionBatch,
+  getQRBySerial
 };
+
+

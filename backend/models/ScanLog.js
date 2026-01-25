@@ -6,7 +6,15 @@ const scanLogSchema = new mongoose.Schema({
     ref: "Serial",
     required: true
   },
+
+  status: {
+    type: String,
+    enum: ["VALID", "SUSPECT", "INVALID"],
+    required: true
+  },
+
   location: { type: String },
+
   scannedAt: { type: Date, default: Date.now }
 });
 

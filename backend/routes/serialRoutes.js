@@ -1,19 +1,22 @@
 const express = require("express");
 const router = express.Router();
-
+const { getAdminStats } = require("../controllers/adminController");
 const {
   generateBatch,
   validateSerial,
-  decommissionBatch
+  decommissionBatch,getQRBySerial
 } = require("../controllers/serialController");
 
 // 1. Batch Generation (Primary / Secondary / Tertiary)
-router.post("/generate-batch", generateBatch);
+router.post("/serials/generate-batch", generateBatch);
 
 // 2. Check Digit Validation
-router.get("/validate/:serial", validateSerial);
+router.get("/serials/validate/:serial", validateSerial);
 
 // 3. Batch Decommissioning
-router.post("/decommission", decommissionBatch);
+router.post("/serials/decommission", decommissionBatch);
+// Admin dashboard statistics
+router.get("/serials/admin/stats", getAdminStats);
+router.get("/qr/:serialNumber", getQRBySerial);
 
 module.exports = router;

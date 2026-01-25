@@ -7,10 +7,10 @@ const {
 } = require("../controllers/aggregationController");
 
 // Create aggregation (packing)
-router.post("/aggregate", aggregateSerials);
+router.post("/hierarchy/aggregate", aggregateSerials);
 
 // Trace full hierarchy path
-router.get("/trace/:serialNumber", traceSerial);//checking remain
+router.get("/hierarchy/trace/:serialNumber", traceSerial);//checking remain
 
 
 module.exports = router;

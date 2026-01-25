@@ -1,14 +1,9 @@
 const crypto = require("crypto");
-
-const SECRET_SALT = "SMARTTRACE_SECRET_2026"; // move to .env later
+const SECRET_SALT = "SMARTTRACE_SECRET_2026";
 
 function generateHash(serialNumber, productionDate, productCode) {
-  const data =
-    serialNumber +
-    productionDate.toISOString() +
-    productCode +
-    SECRET_SALT;
-
+  const ts = new Date(productionDate).getTime();
+  const data = `${serialNumber}|${ts}|${productCode}|${SECRET_SALT}`;
   return crypto.createHash("sha256").update(data).digest("hex");
 }
 

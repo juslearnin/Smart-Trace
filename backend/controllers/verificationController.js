@@ -13,25 +13,40 @@ async function scanAndVerify(req, res) {
       return res.status(400).json({ message: "serialNumber is required" });
     }
 
+    let status = "INVALID";
+    let reason = null;
+    let message = null;
+
     // 1. Check digit validation
     const checkValid = validateLuhn(serialNumber);
     if (!checkValid) {
-      return res.json({
-        status: "INVALID",
-        reason: "CHECK_DIGIT",
-        message: "Check digit invalid. Possible tampering."
-      });
+      reason = "CHECK_DIGIT";
+      message = "Check digit invalid. Possible tampering.";
+
+      // Log INVALID scan (no serial ObjectId available yet)
+      // await ScanLog.create({
+      //   serial: null,
+      //   status,
+      //   location,
+      // });
+
+      return res.json({ status, reason, message });
     }
 
     // 2. Check if serial exists
     const serial = await Serial.findOne({ serialNumber });
 
     if (!serial) {
-      return res.json({
-        status: "INVALID",
-        reason: "NOT_FOUND",
-        message: "Serial not found. Possible counterfeit."
-      });
+      reason = "NOT_FOUND";
+      message = "Serial not found. Possible counterfeit.";
+
+      // await ScanLog.create({
+      //   serial: null,
+      //   status,
+      //   location,
+      // });
+
+      return res.json({ status, reason, message });
     }
 
     // 3. Verify cryptographic hash (anti-tamper)
@@ -43,63 +58,89 @@ async function scanAndVerify(req, res) {
     );
 
     if (!hashValid) {
-      return res.json({
-        status: "INVALID",
-        reason: "HASH_MISMATCH",
-        message: "Hash verification failed. Label data may be tampered."
+      reason = "HASH_MISMATCH";
+      message = "Hash verification failed. Label data may be tampered.";
+
+      await ScanLog.create({
+        serial: serial._id,
+        status,
+        location,
       });
+
+      return res.json({ status, reason, message });
     }
 
     // Optional: verify short verification code if provided
     if (verificationCode && verificationCode !== serial.verificationCode) {
-      return res.json({
-        status: "INVALID",
-        reason: "VERIFICATION_CODE",
-        message: "Verification code mismatch. Possible fake label."
+      reason = "VERIFICATION_CODE";
+      message = "Verification code mismatch. Possible fake label.";
+
+      await ScanLog.create({
+        serial: serial._id,
+        status,
+        location,
       });
+
+      return res.json({ status, reason, message });
     }
 
-    // 4. Log this scan
-    await ScanLog.create({
-      serial: serial._id,
-      location
-    });
+    // 4. Check previous scans (before inserting this one)
+    const previousScans = await ScanLog.find({ serial: serial._id }).sort({ scannedAt: 1 });
+    const previousCount = previousScans.length;
 
-    // 5. Duplicate detection
-    const scans = await ScanLog.find({ serial: serial._id }).sort({ scannedAt: 1 });
-
-    const scanCount = scans.length;
-
-    if (scanCount > 1) {
-      // 6. Location-based anomaly detection
-      const locations = scans.map(s => s.location).filter(Boolean);
+    // 5. Decide final status
+    if (previousCount > 0) {
+      // Duplicate case
+      const locations = previousScans.map(s => s.location).filter(Boolean);
       const uniqueLocations = [...new Set(locations)];
 
-      if (uniqueLocations.length > 1) {
-        return res.json({
-          status: "SUSPECT",
-          reason: "DUPLICATE_DIFFERENT_LOCATION",
-          message: "Serial scanned multiple times from different locations",
-          scanCount,
-          locations: uniqueLocations
-        });
+      if (location) uniqueLocations.push(location);
+
+      const finalUniqueLocations = [...new Set(uniqueLocations)];
+
+      status = "SUSPECT";
+
+      if (finalUniqueLocations.length > 1) {
+        reason = "DUPLICATE_DIFFERENT_LOCATION";
+        message = "Serial scanned multiple times from different locations";
+      } else {
+        reason = "DUPLICATE";
+        message = "Serial scanned multiple times";
       }
 
+      // Save SUSPECT scan
+      await ScanLog.create({
+        serial: serial._id,
+        status,
+        location,
+      });
+
       return res.json({
-        status: "SUSPECT",
-        reason: "DUPLICATE",
-        message: "Serial scanned multiple times",
-        scanCount
+        status,
+        reason,
+        message,
+        scanCount: previousCount + 1,
+        locations: finalUniqueLocations,
       });
     }
 
-    // 7. First valid scan
+    // 6. First valid scan
+    status = "VALID";
+    message = "Serial is valid and authentic";
+
+    // Save VALID scan
+    await ScanLog.create({
+      serial: serial._id,
+      status,
+      location,
+    });
+
     res.json({
-      status: "VALID",
-      message: "Serial is valid and authentic",
+      status,
+      message,
       productCode: serial.productCode,
       level: serial.level,
-      verificationCode: serial.verificationCode
+      verificationCode: serial.verificationCode,
     });
 
   } catch (err) {
@@ -110,6 +151,7 @@ async function scanAndVerify(req, res) {
     });
   }
 }
+
 module.exports = { scanAndVerify };
 
 
@@ -130,11 +172,12 @@ async function verifyHierarchy(req, res) {
     const child = await Serial.findOne({ serialNumber: childSerial });
     const parent = await Serial.findOne({ serialNumber: parentSerial });
 
-    if (!child || !parent) {
-      return res.status(404).json({
-        message: "Child or parent serial not found"
-      });
-    }
+if (!child || !parent) {
+  return res.json({
+    valid: false,
+    message: "Child or parent serial not found"
+  });
+}
 
     // 2. Check aggregation relationship
     const link = await Aggregation.findOne({

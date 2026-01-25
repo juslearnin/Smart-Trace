@@ -8,9 +8,9 @@ const {
 } = require("../controllers/verificationController");
 
 // Main scan & verify
-router.post("/scan", scanAndVerify);
+router.post("/verify/scan", scanAndVerify);
 
 // Hierarchy verification
-router.post("/hierarchy", verifyHierarchy);
+router.post("/verify/hierarchy", verifyHierarchy);
 
 module.exports = router;

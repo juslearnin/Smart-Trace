@@ -1,7 +1,6 @@
 const express = require("express");
 const dotenv = require("dotenv");
-
-const aggregationRoutes = require("./routes/aggregationRoutes");
+const cors = require("cors");
 
 
 // Load environment variables
@@ -16,8 +15,12 @@ const app = express();
 // Middleware
 // --------------------
 app.use(express.json());
-app.use("/api/hierarchy", aggregationRoutes);
 
+app.use(cors({
+  origin: "http://localhost:3000",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 // --------------------
 // Connect to MongoDB
 // --------------------
@@ -26,10 +29,13 @@ connectDB();
 // --------------------
 // Routes
 // --------------------
+const aggregationRoutes = require("./routes/aggregationRoutes");
+app.use("/api", aggregationRoutes);
 const serialRoutes = require("./routes/serialRoutes");
-app.use("/api/serials", serialRoutes);
+app.use("/api", serialRoutes);
 const verificationRoutes = require("./routes/verificationRoutes");
-app.use("/api/verify", verificationRoutes);
+app.use("/api", verificationRoutes);
+   // <-- ADD THIS
 
 
 // Test route
