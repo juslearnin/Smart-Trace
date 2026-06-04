@@ -195,7 +195,32 @@ function handleError(err) {
           >
             {loading ? "Verifying..." : "Verify Product"}
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowScanner(prev => !prev)}
+            className="w-full border border-blue-200 text-blue-700 py-3 rounded-lg font-semibold hover:bg-blue-50 transition"
+          >
+            {showScanner ? "Close QR Scanner" : "Open QR Scanner"}
+          </button>
         </form>
+
+        {showScanner && (
+          <div className="bg-gray-100 p-4 rounded-lg">
+            <QrScanner
+              delay={300}
+              onError={handleError}
+              onScan={handleScan}
+              style={{ width: "100%" }}
+              constraints={{
+                video: { facingMode: "environment" }
+              }}
+            />
+            <p className="text-sm text-gray-500 mt-3 text-center">
+              Point your camera at the QR code on the product label.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Result Panel */}

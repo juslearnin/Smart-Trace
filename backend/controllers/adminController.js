@@ -1,5 +1,7 @@
 const Serial = require("../models/Serial");
 const ScanLog = require("../models/ScanLog");
+const { isDbConnected } = require("../utils/dbState");
+const memoryStore = require("../utils/memoryStore");
 
 /**
  * GET /admin/stats
@@ -7,6 +9,20 @@ const ScanLog = require("../models/ScanLog");
  */
 async function getAdminStats(req, res) {
   try {
+    if (!isDbConnected()) {
+      return res.json({
+        totalSerials: memoryStore.countSerials(),
+        activeSerials: memoryStore.countSerials({ status: "active" }),
+        decommissionedSerials: memoryStore.countSerials({ status: "decommissioned" }),
+        totalScans: memoryStore.countScans(),
+        validScans: memoryStore.countScans({ status: "VALID" }),
+        suspectScans: memoryStore.countScans({ status: "SUSPECT" }),
+        invalidScans: memoryStore.countScans({ status: "INVALID" }),
+        recentScans: memoryStore.recentScans(10),
+        storage: "memory"
+      });
+    }
+
     // Serial counts
     const totalSerials = await Serial.countDocuments();
     const activeSerials = await Serial.countDocuments({ status: "active" });

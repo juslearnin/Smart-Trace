@@ -25,35 +25,40 @@ export default function Overview() {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700">
-        {error}
+      <div className="px-5 py-6 lg:px-8">
+        <div className="mx-auto max-w-7xl bg-red-50 border border-red-200 rounded-md p-5 text-red-700">
+          {error}
+        </div>
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div className="text-gray-500">
-        Loading dashboard...
+      <div className="px-5 py-6 lg:px-8">
+        <div className="mx-auto max-w-7xl text-slate-500">
+          Loading dashboard...
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 w-full">
+    <div className="min-w-0 px-5 py-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
 
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-800">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-950">
           Dashboard Overview
         </h1>
-        <p className="text-gray-500 mt-1">
+        <p className="text-slate-500 mt-1">
           Real-time traceability and verification statistics.
         </p>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Total Serials"
           value={stats.totalSerials}
@@ -77,7 +82,7 @@ export default function Overview() {
       </div>
 
       {/* Charts + Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
 
         {/* Scan Stats Chart */}
         <ScanStatsChart
@@ -91,6 +96,7 @@ export default function Overview() {
         {/* Recent Scans Table */}
         <ScanLogTable scans={stats.recentScans} />
 
+      </div>
       </div>
     </div>
   );

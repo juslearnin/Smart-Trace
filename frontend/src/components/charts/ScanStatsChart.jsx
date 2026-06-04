@@ -7,8 +7,8 @@ export default function ScanStatsChart({ stats }) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow p-6 space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800">
+    <div className="min-w-0 rounded-md border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+      <h3 className="text-lg font-semibold text-slate-950">
         Scan Status Distribution
       </h3>
 

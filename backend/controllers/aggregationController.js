@@ -2,6 +2,9 @@ const Serial = require("../models/Serial");
 const Aggregation = require("../models/Aggregation");
 const { generateSerial } = require("../utils/serialGenerator");
 const { generateSSCC } = require("../utils/ssccGenerator");
+const { generateHash } = require("../utils/hash");
+const { isDbConnected } = require("../utils/dbState");
+const memoryStore = require("../utils/memoryStore");
 
 // ------------------------------
 // 1. Aggregation API
@@ -31,13 +34,19 @@ async function aggregateSerials(req, res) {
     }
 
     // 1. Find unassigned child serials (not already aggregated as child)
-    const alreadyUsedChildren = await Aggregation.find().distinct("child");
+    const alreadyUsedChildren = isDbConnected()
+      ? await Aggregation.find().distinct("child")
+      : memoryStore.childIdsInAggregations();
 
-    const children = await Serial.find({
-      level: childLevel,
-      status: "active",
-      _id: { $nin: alreadyUsedChildren }
-    }).limit(ratio);
+    const children = isDbConnected()
+      ? await Serial.find({
+          level: childLevel,
+          status: "active",
+          _id: { $nin: alreadyUsedChildren }
+        }).limit(ratio)
+      : memoryStore
+          .findSerials({ level: childLevel, status: "active", _id: { $nin: alreadyUsedChildren } })
+          .slice(0, ratio);
 
     if (children.length < ratio) {
       return res.status(400).json({
@@ -60,22 +69,34 @@ async function aggregateSerials(req, res) {
 
     const parentSerialNumber =
       parentLevel === "tertiary" ? parentResult.sscc : parentResult.serialNumber;
+    const checkDigitAlgorithm = parentLevel === "tertiary" ? "gs1" : "luhn";
 
     // Check if parent serial already exists
-    const existingParent = await Serial.findOne({ serialNumber: parentSerialNumber });
+    const existingParent = isDbConnected()
+      ? await Serial.findOne({ serialNumber: parentSerialNumber })
+      : memoryStore.findSerial(parentSerialNumber);
     if (existingParent) {
       return res.status(400).json({ message: "Parent serial number already exists" });
     }
 
-    const parentSerial = await Serial.create({
+    const productionDate = new Date();
+    const hashValue = generateHash(parentSerialNumber, productionDate, productCode);
+    const parentPayload = {
       serialNumber: parentSerialNumber,
       level: parentLevel,
       productCode,
       companyPrefix,
-      productionDate: new Date(),
+      productionDate,
       checkDigit: parentResult.checkDigit,
+      checkDigitAlgorithm,
+      hashValue,
+      verificationCode: hashValue.slice(0, 8),
       status: "active"
-    });
+    };
+
+    const parentSerial = isDbConnected()
+      ? await Serial.create(parentPayload)
+      : memoryStore.createSerial(parentPayload);
 
     // 3. Create parent-child relationships
     const links = children.map(child => ({
@@ -83,7 +104,11 @@ async function aggregateSerials(req, res) {
       child: child._id
     }));
 
-    await Aggregation.insertMany(links);
+    if (isDbConnected()) {
+      await Aggregation.insertMany(links);
+    } else {
+      memoryStore.insertAggregations(links);
+    }
 
     res.json({
       message: "Aggregation successful",
@@ -108,7 +133,9 @@ async function traceSerial(req, res) {
     const { serialNumber } = req.params;
 
     // Find the serial
-    const serial = await Serial.findOne({ serialNumber });
+    const serial = isDbConnected()
+      ? await Serial.findOne({ serialNumber })
+      : memoryStore.findSerial(serialNumber);
 
     if (!serial) {
       return res.status(404).json({ message: "Serial not found" });
@@ -119,16 +146,22 @@ async function traceSerial(req, res) {
 
     // Go upward until no parent found
     while (true) {
-      const link = await Aggregation.findOne({ child: current._id }).populate("parent");
+      const link = isDbConnected()
+        ? await Aggregation.findOne({ child: current._id }).populate("parent")
+        : memoryStore.findAggregation({ child: current._id });
 
       if (!link) break;
+      const parent = isDbConnected()
+        ? link.parent
+        : Array.from(memoryStore.findSerials()).find(item => item._id === link.parent);
+      if (!parent) break;
 
       path.push({
-        level: link.parent.level,
-        serialNumber: link.parent.serialNumber
+        level: parent.level,
+        serialNumber: parent.serialNumber
       });
 
-      current = link.parent;
+      current = parent;
     }
 
     res.json({

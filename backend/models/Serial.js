@@ -17,6 +17,11 @@ const serialSchema = new mongoose.Schema({
   productionDate: { type: Date, required: true },
 
   checkDigit: { type: Number, required: true },
+  checkDigitAlgorithm: {
+    type: String,
+    enum: ["luhn", "gs1"],
+    default: "luhn"
+  },
   qrCode: { type: String },  // URL to QR code image
 
 hashValue: { type: String },           // full SHA256

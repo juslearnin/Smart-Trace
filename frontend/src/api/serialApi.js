@@ -14,7 +14,7 @@ export async function generateBatch(data) {
  * GET /validate/:serial
  */
 export async function validateSerial(serial) {
-  const response = await api.get(`/validate/${serial}`);
+  const response = await api.get(`/serials/validate/${serial}`);
   return response.data;
 }
 

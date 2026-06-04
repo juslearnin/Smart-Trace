@@ -1,31 +1,39 @@
 export default function ScanLogTable({ scans }) {
   return (
-    <div className="bg-white rounded-xl shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">
+    <div className="min-w-0 rounded-md border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-slate-950 mb-4">
         Recent Scan Logs
       </h3>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+      <div className="overflow-hidden rounded-md border border-slate-100">
+        <table className="w-full table-fixed text-sm">
           <thead>
-            <tr className="border-b text-gray-500">
-              <th className="text-left py-2">Serial</th>
-              <th className="text-left py-2">Status</th>
-              <th className="text-left py-2">Location</th>
-              <th className="text-left py-2">Scanned At</th>
+            <tr className="border-b bg-slate-50 text-slate-500">
+              <th className="w-[42%] text-left px-3 py-2">Serial</th>
+              <th className="w-[18%] text-left px-3 py-2">Status</th>
+              <th className="w-[16%] text-left px-3 py-2">Location</th>
+              <th className="w-[24%] text-left px-3 py-2">Scanned At</th>
             </tr>
           </thead>
 
           <tbody>
+            {scans.length === 0 && (
+              <tr>
+                <td className="px-3 py-6 text-center text-slate-500" colSpan="4">
+                  No scan logs yet.
+                </td>
+              </tr>
+            )}
+
             {scans.map((log, idx) => (
               <tr key={idx} className="border-b">
-                <td className="py-2 font-mono text-xs">
+                <td className="break-all px-3 py-2 font-mono text-xs">
                   {log.serialNumber}
                 </td>
 
-                <td className="py-2">
+                <td className="px-3 py-2">
                   <span
-                    className={`px-2 py-1 rounded text-xs font-semibold ${
+                    className={`inline-block rounded px-2 py-1 text-xs font-semibold ${
                       log.status === "VALID"
                         ? "bg-green-100 text-green-800"
                         : log.status === "SUSPECT"
@@ -37,11 +45,11 @@ export default function ScanLogTable({ scans }) {
                   </span>
                 </td>
 
-                <td className="py-2">
+                <td className="truncate px-3 py-2" title={log.location || "-"}>
                   {log.location || "-"}
                 </td>
 
-                <td className="py-2 text-gray-500">
+                <td className="px-3 py-2 text-slate-500">
                   {new Date(log.scannedAt).toLocaleString()}
                 </td>
               </tr>

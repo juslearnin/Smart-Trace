@@ -1,8 +1,10 @@
 const Serial = require("../models/Serial");
 const ScanLog = require("../models/ScanLog");
-const { validateLuhn } = require("../utils/luhn");
+const { validateAnyCheckDigit, validateCheckDigit } = require("../utils/luhn");
 const Aggregation = require("../models/Aggregation");
 const { verifyHash } = require("../utils/hash");
+const { isDbConnected } = require("../utils/dbState");
+const memoryStore = require("../utils/memoryStore");
 
 
 async function scanAndVerify(req, res) {
@@ -18,7 +20,7 @@ async function scanAndVerify(req, res) {
     let message = null;
 
     // 1. Check digit validation
-    const checkValid = validateLuhn(serialNumber);
+    const checkValid = validateAnyCheckDigit(serialNumber);
     if (!checkValid) {
       reason = "CHECK_DIGIT";
       message = "Check digit invalid. Possible tampering.";
@@ -34,7 +36,9 @@ async function scanAndVerify(req, res) {
     }
 
     // 2. Check if serial exists
-    const serial = await Serial.findOne({ serialNumber });
+    const serial = isDbConnected()
+      ? await Serial.findOne({ serialNumber })
+      : memoryStore.findSerial(serialNumber);
 
     if (!serial) {
       reason = "NOT_FOUND";
@@ -45,6 +49,20 @@ async function scanAndVerify(req, res) {
       //   status,
       //   location,
       // });
+
+      return res.json({ status, reason, message });
+    }
+
+    const algorithm = serial.checkDigitAlgorithm || (serial.level === "tertiary" ? "gs1" : "luhn");
+    if (!validateCheckDigit(serialNumber, algorithm)) {
+      reason = "CHECK_DIGIT";
+      message = "Check digit does not match the stored label type.";
+
+      if (isDbConnected()) {
+        await ScanLog.create({ serial: serial._id, status, location });
+      } else {
+        memoryStore.createScan({ serial: serial._id, status, location });
+      }
 
       return res.json({ status, reason, message });
     }
@@ -61,11 +79,11 @@ async function scanAndVerify(req, res) {
       reason = "HASH_MISMATCH";
       message = "Hash verification failed. Label data may be tampered.";
 
-      await ScanLog.create({
-        serial: serial._id,
-        status,
-        location,
-      });
+      if (isDbConnected()) {
+        await ScanLog.create({ serial: serial._id, status, location });
+      } else {
+        memoryStore.createScan({ serial: serial._id, status, location });
+      }
 
       return res.json({ status, reason, message });
     }
@@ -75,17 +93,19 @@ async function scanAndVerify(req, res) {
       reason = "VERIFICATION_CODE";
       message = "Verification code mismatch. Possible fake label.";
 
-      await ScanLog.create({
-        serial: serial._id,
-        status,
-        location,
-      });
+      if (isDbConnected()) {
+        await ScanLog.create({ serial: serial._id, status, location });
+      } else {
+        memoryStore.createScan({ serial: serial._id, status, location });
+      }
 
       return res.json({ status, reason, message });
     }
 
     // 4. Check previous scans (before inserting this one)
-    const previousScans = await ScanLog.find({ serial: serial._id }).sort({ scannedAt: 1 });
+    const previousScans = isDbConnected()
+      ? await ScanLog.find({ serial: serial._id }).sort({ scannedAt: 1 })
+      : memoryStore.findScansBySerial(serial._id);
     const previousCount = previousScans.length;
 
     // 5. Decide final status
@@ -109,11 +129,11 @@ async function scanAndVerify(req, res) {
       }
 
       // Save SUSPECT scan
-      await ScanLog.create({
-        serial: serial._id,
-        status,
-        location,
-      });
+      if (isDbConnected()) {
+        await ScanLog.create({ serial: serial._id, status, location });
+      } else {
+        memoryStore.createScan({ serial: serial._id, status, location });
+      }
 
       return res.json({
         status,
@@ -129,11 +149,11 @@ async function scanAndVerify(req, res) {
     message = "Serial is valid and authentic";
 
     // Save VALID scan
-    await ScanLog.create({
-      serial: serial._id,
-      status,
-      location,
-    });
+    if (isDbConnected()) {
+      await ScanLog.create({ serial: serial._id, status, location });
+    } else {
+      memoryStore.createScan({ serial: serial._id, status, location });
+    }
 
     res.json({
       status,
@@ -169,8 +189,12 @@ async function verifyHierarchy(req, res) {
     }
 
     // 1. Find child and parent serial documents
-    const child = await Serial.findOne({ serialNumber: childSerial });
-    const parent = await Serial.findOne({ serialNumber: parentSerial });
+    const child = isDbConnected()
+      ? await Serial.findOne({ serialNumber: childSerial })
+      : memoryStore.findSerial(childSerial);
+    const parent = isDbConnected()
+      ? await Serial.findOne({ serialNumber: parentSerial })
+      : memoryStore.findSerial(parentSerial);
 
 if (!child || !parent) {
   return res.json({
@@ -180,10 +204,9 @@ if (!child || !parent) {
 }
 
     // 2. Check aggregation relationship
-    const link = await Aggregation.findOne({
-      parent: parent._id,
-      child: child._id
-    });
+    const link = isDbConnected()
+      ? await Aggregation.findOne({ parent: parent._id, child: child._id })
+      : memoryStore.findAggregation({ parent: parent._id, child: child._id });
 
     if (!link) {
       return res.json({

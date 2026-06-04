@@ -15,5 +15,7 @@ const aggregationSchema = new mongoose.Schema({
 
 // Prevent duplicate parent-child pairs
 aggregationSchema.index({ parent: 1, child: 1 }, { unique: true });
+aggregationSchema.index({ child: 1 });
+aggregationSchema.index({ parent: 1 });
 
 module.exports = mongoose.model("Aggregation", aggregationSchema);

@@ -1,64 +1,49 @@
 const Serial = require("../models/Serial");
-const { generateSerial } = require("../utils/serialGenerator");
-const { generateSSCC } = require("../utils/ssccGenerator");
-const { validateLuhn } = require("../utils/luhn");
+const { validateAnyCheckDigit } = require("../utils/luhn");
 const { generateQRCode } = require("../utils/qr");
-const { generateHash } = require("../utils/hash");
+const { generateLabelRecords } = require("../utils/labelBatchGenerator");
+const { isDbConnected } = require("../utils/dbState");
+const memoryStore = require("../utils/memoryStore");
 
 // ------------------------------
 // 1. Batch Generation Controller
 // ------------------------------
 async function generateBatch(req, res) {
   try {
-    const { companyPrefix, productCode, level, quantity } = req.body;
+    const { companyPrefix, productCode, level, quantity, includeQr } = req.body;
 
     if (!companyPrefix || !productCode || !level || !quantity) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const bulk = [];
     const productionDate = new Date();
+    const bulk = generateLabelRecords({
+      companyPrefix,
+      productCode,
+      level,
+      quantity: Number(quantity),
+      productionDate
+    });
 
-    for (let i = 0; i < quantity; i++) {
-      let result;
+    const shouldGenerateQr = includeQr === true || (includeQr !== false && bulk.length <= 1000);
+    if (shouldGenerateQr) {
+      await Promise.all(bulk.map(async item => {
+        const qrPayload = {
+          serialNumber: item.serialNumber,
+          productCode,
+          level,
+          verifyUrl: `http://localhost:3000/scan?serial=${item.serialNumber}`
+        };
 
-      if (level === "tertiary") {
-        result = generateSSCC(companyPrefix);
-      } else {
-        result = generateSerial(companyPrefix);
-      }
-
-      const serialNumber = level === "tertiary" ? result.sscc : result.serialNumber;
-      const hashValue = generateHash(serialNumber, productionDate, productCode);
-      const verificationCode = hashValue.slice(0, 8); // first 8 chars
-
-
-      // Payload embedded inside QR
-const qrPayload = {
-  serialNumber,
-  productCode,
-  level,
-  verifyUrl: `http://localhost:3000/scan?serial=${serialNumber}`
-};
-
-
-      const qrCode = await generateQRCode(qrPayload);
-
-      bulk.push({
-        serialNumber,
-        level,
-        productCode,
-        companyPrefix,
-        productionDate,
-        checkDigit: result.checkDigit,
-        qrCode,                // <-- QR stored correctly
-        hashValue,
-        verificationCode,
-        status: "active"
-      });
+        item.qrCode = await generateQRCode(qrPayload);
+      }));
     }
 
-    await Serial.insertMany(bulk, { ordered: false });
+    if (isDbConnected()) {
+      await Serial.insertMany(bulk, { ordered: false });
+    } else {
+      memoryStore.insertSerials(bulk);
+    }
 res.json({
   message: "Batch generated successfully",
   generated: bulk.length,
@@ -83,7 +68,7 @@ res.json({
 function validateSerial(req, res) {
   const { serial } = req.params;
 
-  const valid = validateLuhn(serial);
+  const valid = validateAnyCheckDigit(serial);
 
   res.json({
     serial,
@@ -102,10 +87,12 @@ async function decommissionBatch(req, res) {
       return res.status(400).json({ message: "serialNumbers must be a non-empty array" });
     }
 
-    const result = await Serial.updateMany(
-      { serialNumber: { $in: serialNumbers } },
-      { $set: { status: "decommissioned" } }
-    );
+    const result = isDbConnected()
+      ? await Serial.updateMany(
+          { serialNumber: { $in: serialNumbers } },
+          { $set: { status: "decommissioned" } }
+        )
+      : memoryStore.updateSerials(serialNumbers, { status: "decommissioned" });
 
     res.json({
       message: "Decommissioned successfully",

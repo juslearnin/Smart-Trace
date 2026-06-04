@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { useState } from "react";
 import Sidebar from "../components/navigation/Sidebar";
 import Topbar from "../components/navigation/Topbar";
 
@@ -11,27 +12,35 @@ import Topbar from "../components/navigation/Topbar";
  * - Main content area for admin pages
  */
 export default function AdminLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
-    <div className="min-h-screen flex bg-gray-100">
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar overlay"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-slate-950/30 backdrop-blur-[1px]"
+        />
+      )}
 
-      {/* Sidebar */}
-      <div className="w-64 bg-gray-900 text-white">
-        <Sidebar />
-      </div>
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-72 border-r border-slate-200 bg-white shadow-xl transition-transform duration-300 ease-out ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <Sidebar onNavigate={() => setSidebarOpen(false)} onClose={() => setSidebarOpen(false)} />
+      </aside>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col">
+      <div className="min-w-0 min-h-screen flex flex-col">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center px-5 lg:px-8">
+          <Topbar onMenuClick={() => setSidebarOpen(true)} />
+        </header>
 
-        {/* Topbar */}
-        <div className="h-14 bg-white border-b flex items-center px-6">
-          <Topbar />
-        </div>
-
-        {/* Page Content */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto">
           <Outlet />
-        </div>
-
+        </main>
       </div>
     </div>
   );
