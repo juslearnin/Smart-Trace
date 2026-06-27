@@ -24,32 +24,76 @@ async function scanAndVerify(req, res) {
     if (!checkValid) {
       reason = "CHECK_DIGIT";
       message = "Check digit invalid. Possible tampering.";
-
-      // Log INVALID scan (no serial ObjectId available yet)
-      // await ScanLog.create({
-      //   serial: null,
-      //   status,
-      //   location,
-      // });
-
       return res.json({ status, reason, message });
     }
 
     // 2. Check if serial exists
-    const serial = isDbConnected()
+    let serial = isDbConnected()
       ? await Serial.findOne({ serialNumber })
       : memoryStore.findSerial(serialNumber);
+
+    // ========================================================
+    // GLOBAL HIERARCHY DECOMMISSION CHECK & DESTROY
+    // ========================================================
+    if (serial) {
+      let isDecommissionedByParent = false;
+
+      // Check if this item belongs to a parent container that was decommissioned
+      if (isDbConnected()) {
+        const aggregationLink = await Aggregation.findOne({ child: serial._id });
+        if (aggregationLink) {
+          const parentSerial = await Serial.findById(aggregationLink.parent);
+          if (parentSerial) {
+            const parentStatus = String(parentSerial.status || "").toUpperCase();
+            if (parentStatus === "DECOMMISSIONED" || parentSerial.isDecommissioned === true || parentSerial.decommissioned === true) {
+              isDecommissionedByParent = true;
+            }
+          }
+        }
+      }
+
+      // Read current statuses safely
+      const serialStatus = String(serial.status || "").toUpperCase();
+      
+      // Look through logs for any decommissioning footprint
+      const logs = isDbConnected()
+        ? await ScanLog.find({ serial: serial._id })
+        : memoryStore.findScansBySerial(serial._id);
+      const hasDecommissionLog = logs.some(log => String(log.status).toUpperCase() === "DECOMMISSIONED");
+
+      // Master condition: Is this item or its container decommissioned?
+      const triggerWipe = (
+        serialStatus === "DECOMMISSIONED" || 
+        serial.isDecommissioned === true || 
+        serial.decommissioned === true ||
+        hasDecommissionLog ||
+        isDecommissionedByParent ||
+        (serialStatus !== "ACTIVE" && serialStatus !== "VALID" && serialStatus !== "")
+      );
+
+      if (triggerWipe) {
+        // Nuke it completely out of existence across all collections
+        if (isDbConnected()) {
+          await Serial.deleteOne({ _id: serial._id });
+          await ScanLog.deleteMany({ serial: serial._id });
+          await Aggregation.deleteMany({ $or: [{ child: serial._id }, { parent: serial._id }] });
+        }
+        
+        if (memoryStore) {
+          if (typeof memoryStore.deleteSerial === "function") memoryStore.deleteSerial(serialNumber);
+          if (memoryStore.serials && Array.isArray(memoryStore.serials)) {
+            memoryStore.serials = memoryStore.serials.filter(s => s.serialNumber !== serialNumber);
+          }
+        }
+
+        // Drop variable to null so it forces a "does not exist" response
+        serial = null;
+      }
+    }
 
     if (!serial) {
       reason = "NOT_FOUND";
       message = "Serial not found. Possible counterfeit.";
-
-      // await ScanLog.create({
-      //   serial: null,
-      //   status,
-      //   location,
-      // });
-
       return res.json({ status, reason, message });
     }
 
@@ -196,12 +240,12 @@ async function verifyHierarchy(req, res) {
       ? await Serial.findOne({ serialNumber: parentSerial })
       : memoryStore.findSerial(parentSerial);
 
-if (!child || !parent) {
-  return res.json({
-    valid: false,
-    message: "Child or parent serial not found"
-  });
-}
+    if (!child || !parent) {
+      return res.json({
+        valid: false,
+        message: "Child or parent serial not found"
+      });
+    }
 
     // 2. Check aggregation relationship
     const link = isDbConnected()
@@ -238,4 +282,3 @@ module.exports = {
   scanAndVerify,
   verifyHierarchy
 };
-
